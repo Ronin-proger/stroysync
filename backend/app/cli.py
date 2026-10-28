@@ -6,10 +6,10 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from .config import settings
 from .db import Base, SessionLocal, engine
 from .seed import seed_if_empty
 from .services.pipeline import analyze_image
+from .timeutil import utcnow
 
 
 def main() -> None:
@@ -24,7 +24,7 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     seed_if_empty(db)
-    captured = datetime.fromisoformat(args.at) if args.at else datetime.utcnow()
+    captured = datetime.fromisoformat(args.at) if args.at else utcnow()
     snap = analyze_image(
         db,
         image_path=Path(args.image),

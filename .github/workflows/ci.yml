@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-lite.txt
-          pip install ruff psycopg2-binary
+          pip install ruff==0.17.3 psycopg2-binary
       - name: Lint
         run: ruff check app tests
       - name: Tests

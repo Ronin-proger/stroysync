@@ -12,7 +12,6 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 from ..config import settings
@@ -48,10 +47,9 @@ class EquipmentDetector:
                 return self.backend
             if requested == "world":
                 logger.warning("YOLO-World недоступен, переключаюсь на запасной режим")
-        if requested in ("auto", "coco"):
-            if self._try_coco():
-                self._loaded = True
-                return self.backend
+        if requested in ("auto", "coco") and self._try_coco():
+            self._loaded = True
+            return self.backend
         self.backend = "demo"
         self._loaded = True
         logger.info("Детектор работает в demo-режиме")
@@ -70,7 +68,7 @@ class EquipmentDetector:
             self.backend = "world"
             logger.info("Загружен YOLO-World, классы: %s", prompts)
             return True
-        except Exception as exc:
+        except (ImportError, OSError, RuntimeError) as exc:
             logger.warning("YOLO-World не загрузился: %s", exc)
             return False
 
@@ -82,11 +80,13 @@ class EquipmentDetector:
             self.backend = "coco"
             logger.info("Загружен YOLOv8n (COCO)")
             return True
-        except Exception as exc:
+        except (ImportError, OSError, RuntimeError) as exc:
             logger.warning("YOLOv8n не загрузился: %s", exc)
             return False
 
     def detect(self, image_path: str | Path, hint: str | None = None) -> list[RawDetection]:
+        import cv2
+
         path = Path(image_path)
         image = cv2.imread(str(path))
         if image is None:

@@ -10,6 +10,7 @@ from ..models import Camera, Snapshot
 from ..schemas import AnalyzeResponse
 from ..seed import stages_as_dicts
 from ..services.pipeline import analyze_image
+from ..timeutil import utcnow
 from .serializers import camera_to_out, snapshot_to_out, stage_to_out
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -30,10 +31,10 @@ async def analyze(
     camera = db.get(Camera, camera_id)
     if camera is None:
         raise HTTPException(404, f"Камера {camera_id} не найдена")
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = utcnow().strftime("%Y%m%d_%H%M%S")
     dest = settings.upload_dir / f"{ts}_{_safe_filename(file.filename or 'snapshot.jpg')}"
     dest.write_bytes(await file.read())
-    when = datetime.fromisoformat(captured_at) if captured_at else datetime.utcnow()
+    when = datetime.fromisoformat(captured_at) if captured_at else utcnow()
     try:
         snapshot = analyze_image(
             db,

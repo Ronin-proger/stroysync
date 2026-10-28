@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from .models import Camera, EquipmentType, WorkStage
 from .services.knowledge import EQUIPMENT_CATALOG
-
 
 STAGES = [
     {

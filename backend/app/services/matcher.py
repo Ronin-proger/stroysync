@@ -24,6 +24,7 @@ from .knowledge import (
     stage_time_status,
 )
 
+
 def match_snapshot(
     *,
     detections: list,

@@ -296,10 +296,10 @@ $("notes-form")?.addEventListener("submit", async (e) => {
   } catch (err) { alert(err.message); }
   setBusy(false);
 });
-$("note-ai")?.addEventListener("click", async () => {
+$("note-report")?.addEventListener("click", async () => {
   setBusy(true);
   try {
-    const out = await json("/api/notes/ai", {
+    const out = await json("/api/notes/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ units: ["CRN-A-MSK", "BLD-A-MSK", "BLD-C-MSK"] }),

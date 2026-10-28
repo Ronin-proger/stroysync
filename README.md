@@ -1,99 +1,107 @@
 # StroySync
 
-StroySync связывает кадр с камеры стройплощадки с календарным графиком (WBS) и картой участка. Детектор находит технику на снимке, матчер сравнивает состав машин с допустимым набором активного этапа и выдаёт статус: в графике, отклонение или критично.
+[![CI](https://github.com/Ronin-proger/stroysync/actions/workflows/ci.yml/badge.svg)](https://github.com/Ronin-proger/stroysync/actions/workflows/ci.yml)
+
+Construction-site monitoring that links a camera frame to the project schedule. Equipment is detected in the frame, the active WBS stages for that camera and date are resolved, and the observed machinery is scored against what each stage requires, allows or forbids. The result is a status (on schedule, deviation, critical) with the rule that triggered it.
+
+![Site map](docs/screens/unit-map-wide.png)
 
 ## Pipeline
 
 ```text
-снимок → детектор техники → сравнение с typical_signature / WBS → статус + правило
+frame ─► detector ─► detections ─┬─► schedule matcher ─► scorecard + rule ids
+                                 │        ▲
+                                 │        └── camera × date → active leaf WBS stages
+                                 └─► ground projection ─► 3D site twin (glTF)
 ```
 
-Бэкенды детектора: `auto` (world → coco → demo), `world` (YOLO-World), `coco` (YOLOv8n), `demo` (детерминированные боксы для тестов, не модель). По умолчанию — `auto`. Для офлайн CI задайте `DETECTOR_BACKEND=demo`.
+**Detection.** Backends are selected with `DETECTOR_BACKEND`:
 
-YOLO-путь сохраняется: при доступном Ultralytics поднимается YOLO-World (или COCO), иначе система откатывается на demo.
+| Backend | Model | Use |
+|---|---|---|
+| `world` | YOLO-World, open-vocabulary prompts for 8 equipment classes | default when Ultralytics is installed |
+| `coco` | YOLOv8n, COCO classes remapped | fallback |
+| `demo` | deterministic boxes keyed by sample scene, no model | offline CI and tests |
+| `auto` | `world → coco → demo` | default |
 
-## Запуск
+**Schedule matching** (`services/matcher.py`). Each criterion is scored from 0 to 1, and the overall index is a weighted sum:
 
-Основной способ — Docker Compose:
+- coverage: the share of required equipment that is visible
+- signature: the Jaccard similarity to the stage's `typical_signature`
+- role fit: earthworks, concrete, lifting and similar roles
+- safety: 0 if any forbidden machine is present
+- activity: whether any machinery is present at all
 
-```powershell
+Rules fire on leaf WBS nodes only, so parent and child stages never duplicate a warning.
+
+**Site twin** (`services/reconstructor.py`). Two complementary paths feed a shared world frame:
+
+- Pixels are back-projected onto the ground and the pit using known camera poses. AKAZE keypoints are matched between frames and triangulated into a point cloud.
+- The bottom edge of each detection box is cast as a ray to the ground, which places the machine in 3D.
+
+The scene is exported as binary glTF and rendered with three.js.
+
+**Site notes** (`services/obsidian.py`). Shift logs and daily reports are stored as markdown in an Obsidian vault (`HACAOBS/`). Writes go through the Obsidian Local REST API when it is running, and directly to the filesystem otherwise. The note graph is rendered in the dashboard.
+
+## Running
+
+```bash
 docker compose up --build
 ```
 
 - UI: http://localhost:8080
-- API / дашборд: http://localhost:8000
+- API and dashboard: http://localhost:8000
 - OpenAPI: http://localhost:8000/docs
 
-Скопируйте `.env.example` в `.env` при необходимости. `CORS_ORIGINS` — список origin через запятую (не `*`).
+Copy `.env.example` to `.env` to override settings. `CORS_ORIGINS` is an explicit comma-separated list.
 
-Локально без Docker (Windows): `start-backend.bat` и `start-frontend.bat` поднимают FastAPI и Vite; bat-файлы явно ставят `DETECTOR_BACKEND=demo` для работы без весов.
+Without Docker:
 
-```powershell
-# backend вручную
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
-$env:PYTHONPATH = "$pwd\backend"
-$env:DETECTOR_BACKEND = "demo"
-uvicorn app.main:app --app-dir backend --reload --port 8000
+```bash
+python -m venv .venv && . .venv/bin/activate      # Windows: start-backend.bat
+pip install -r backend/requirements.txt           # + `pip install ultralytics` for YOLO
+PYTHONPATH=backend DETECTOR_BACKEND=demo uvicorn app.main:app --app-dir backend --reload
 
-# frontend
-cd frontend
-npm install
-npm run dev
-```
-
-Тесты (offline, demo):
-
-```powershell
-cd backend
-$env:DETECTOR_BACKEND = "demo"
-pytest -q
+cd frontend && npm install && npm run dev
 ```
 
 CLI:
 
-```powershell
-$env:PYTHONPATH = "$pwd\backend"
-python -m app.cli analyze data\samples\sample_foundation.jpg --camera CAM-01 --at 2026-09-17T10:15:00
+```bash
+PYTHONPATH=backend python -m app.cli analyze data/samples/sample_foundation.jpg \
+  --camera CAM-01 --at 2026-09-17T10:15:00
 ```
 
-## Стек
+Tests and lint:
 
-- Backend: FastAPI, SQLAlchemy (SQLite / PostgreSQL), OpenCV, Pillow; опционально Ultralytics (YOLO-World / YOLOv8)
-- Frontend: React + Vite; встроенный дашборд на `backend/app/static`
-- Данные: CSV/XLSX график, markdown-хранилище Obsidian (`HACAOBS/`)
-- Поставка: Docker Compose
+```bash
+cd backend
+DETECTOR_BACKEND=demo pytest -q
+ruff check app tests
+```
 
-Шейдеры участка (triplanar / Unreal / Unity) лежат в `tools/site_dcc/shaders/` и используются пайплайном сборки сцены.
-
-## Структура
+## Layout
 
 ```text
-backend/app/      API, детектор, матчер WBS, дашборд
-frontend/         React UI
-data/schedule/    календарный график
-data/samples/     сэмплы кадров
-HACAOBS/          заметки площадки (markdown)
-tools/site_dcc/   сборка сцены и шейдеры
-docs/             DATA_MODEL.md, скриншоты
+backend/app/
+  api/            FastAPI routers: analyze, catalog, twin, notes
+  services/       detector, matcher, reconstructor, site_map, obsidian
+  static/         embedded dashboard (three.js twin, notes graph)
+frontend/         React + Vite UI
+data/schedule/    WBS calendar (CSV / XLSX)
+tools/site_dcc/   procedural site assembly, triplanar shaders (GLSL, Unity, Unreal)
+HACAOBS/          site notes vault
+docs/             DATA_MODEL.md, screenshots
 ```
 
-## Карта участка
-
-Трёхмерная площадка SITE-01 (корпуса, краны, котлован). Выбор объекта открывает карточку статуса.
-
-![Карта участка](docs/screens/unit-map-wide.png)
-
-![Корпуса](docs/screens/buildings.png)
-
-![Кран](docs/screens/crane-close.png)
+![Buildings](docs/screens/buildings.png)
+![Crane](docs/screens/crane-close.png)
 
 ## Limitations
 
-- Модель не дообучалась на закрытой разметке площадки; open-vocabulary YOLO-World / COCO дают грубые классы техники.
-- `demo` не распознаёт произвольные фото — только стабильные боксы по имени сцены для pytest и офлайн-прогона.
-- Сопоставление с графиком — по пересечению множеств кодов техники и правилам WBS, без трекинга по видеоряду.
-- Сгенерированные twin-файлы (`media/twins/*.bin`, `*.ply`) в репозиторий не входят; сцена собирается при работе сервиса.
+- The detector is not fine-tuned on site imagery. Open-vocabulary and COCO classes are coarse for specialised machinery.
+- `demo` does not recognise arbitrary photos. It returns fixed boxes per sample scene for tests.
+- Matching works on single frames: equipment sets are compared per snapshot, without tracking across video.
+- Generated twin artefacts (`media/twins/*.bin`, `*.ply`) are built at runtime and are not committed.
 
-Подробнее о сущностях: `docs/DATA_MODEL.md`.
+Entity model: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).

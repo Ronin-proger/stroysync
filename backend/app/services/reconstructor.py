@@ -12,8 +12,8 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 VIDEO_EXT = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
 MAX_POINTS = 9000
 MAX_FRAMES = 10
+PIT_FLOOR_Y = -2.6
 
 
 def default_scene() -> dict:
@@ -138,8 +139,8 @@ def detect_on_frames(frames: list[tuple[np.ndarray, str, str | None]]) -> list[l
         cv2.imwrite(str(tmp), image)
         try:
             out.append(detector.detect(tmp, hint=hint))
-        except Exception as exc:
-            logger.warning("Детекция кадра %s не удалась: %s", i, exc)
+        except Exception:
+            logger.exception("Детекция кадра %s не удалась", i)
             out.append([])
     return out
 
@@ -167,14 +168,10 @@ def write_ply(scene: dict, path: Path) -> Path:
 def write_gltf(scene: dict, path: Path) -> Path:
     """Минимальный glTF: площадка + техника как боксы (для скачивания в CAD/просмотрщиках)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    nodes = []
-    meshes = []
-    accessors = []
-    buffer_views = []
-    positions = []
+    positions: list[float] = []
 
-    def add_box(cx, cy, cz, sx, sy, sz, color):
-        hx, hy, hz = sx / 2, sy / 2, sz / 2
+    def add_box(cx, cy, cz, sx, sy, sz):
+        hx, hz = sx / 2, sz / 2
         corners = [
             [cx - hx, cy, cz - hz],
             [cx + hx, cy, cz - hz],
@@ -196,30 +193,23 @@ def write_gltf(scene: dict, path: Path) -> Path:
             2, 6, 7, 2, 7, 3,
             3, 7, 4, 3, 4, 0,
         ]
-        return idx0, faces, color
+        return [idx0 + v for v in faces]
 
     boxes = [
-        (0, -0.05, 0, 80, 0.1, 80, [0.42, 0.34, 0.24]),
-        (-3, -1.4, 6, 20, 2.8, 18, [0.45, 0.36, 0.25]),
-        (0, 0.15, 4, 16, 0.3, 12, [0.62, 0.62, 0.6]),
-        (12, 0, -8, 16, 1.0, 12, [0.72, 0.71, 0.68]),
+        (0, -0.05, 0, 80, 0.1, 80),
+        (-3, -1.4, 6, 20, 2.8, 18),
+        (0, 0.15, 4, 16, 0.3, 12),
+        (12, 0, -8, 16, 1.0, 12),
     ]
     for eq in scene.get("equipment") or []:
         p = eq["position"]
-        boxes.append((p[0], 0.0, p[2], 4.2, 2.4, 2.2, [0.96, 0.65, 0.14]))
+        boxes.append((p[0], 0.0, p[2], 4.2, 2.4, 2.2))
 
-    bin_indices = []
-    mesh_i = 0
-    for cx, cy, cz, sx, sy, sz, color in boxes:
-        idx0, faces, color = add_box(cx, cy, cz, sx, sy, sz, color)
-        shifted = [idx0 + v for v in faces]
-        start = len(bin_indices)
-        bin_indices.extend(shifted)
-        meshes.append({"primitives": [{"attributes": {"POSITION": 0}, "indices": 1, "mode": 4}]})
-        nodes.append({"mesh": 0, "name": f"part_{mesh_i}"})
-        mesh_i += 1
+    # Все боксы в одном primitive: просмотрщики открывают такой файл без настройки.
+    bin_indices: list[int] = []
+    for box in boxes:
+        bin_indices.extend(add_box(*box))
 
-    # Один общий mesh проще для просмотрщика: пересобираем как один primitive
     nodes = [{"mesh": 0, "name": "StroySyncTwin"}]
     meshes = [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1, "mode": 4}]}]
 
@@ -258,8 +248,6 @@ def write_gltf(scene: dict, path: Path) -> Path:
             },
         ],
     }
-    import json
-
     path.write_text(json.dumps(gltf), encoding="utf-8")
     return path
 
@@ -280,12 +268,11 @@ def _backproject_image(image: np.ndarray, pose: dict, stride: int = 7) -> tuple[
     for y in range(0, h, stride):
         for x in range(0, w, stride):
             origin, direction = pixel_ray(pose, x + 0.5, y + 0.5, w, h)
-            y_plane = PIT_BOUNDS_DEPTH if False else 0.0
             hit = intersect_ground(origin, direction, 0.0)
             if hit is None:
                 continue
             if in_pit(hit[0], hit[2]) and direction[1] < 0:
-                pit_hit = intersect_ground(origin, direction, -2.6)
+                pit_hit = intersect_ground(origin, direction, PIT_FLOOR_Y)
                 if pit_hit is not None:
                     hit = pit_hit
             b, g, r = small[y, x]
@@ -295,9 +282,6 @@ def _backproject_image(image: np.ndarray, pose: dict, stride: int = 7) -> tuple[
             xyz.extend((float(hit[0]), float(hit[1]), float(hit[2])))
             rgb.extend((int(r), int(g), int(b)))
     return xyz, rgb
-
-
-PIT_BOUNDS_DEPTH = -2.6
 
 
 def _detection_to_equipment(det: RawDetection, pose: dict, width: int, height: int) -> dict | None:
@@ -329,7 +313,7 @@ def _triangulate_pairs(frames: list[tuple[np.ndarray, str, str | None]]) -> tupl
     rgb: list[int] = []
     matches_total = 0
     akaze = cv2.AKAZE_create()
-    prev_gray = prev_color = prev_kp = prev_des = prev_cam = None
+    prev_kp = prev_des = prev_cam = None
     for image, camera_id, _ in frames:
         gray = cv2.cvtColor(cv2.resize(image, (720, 405)), cv2.COLOR_BGR2GRAY)
         color = cv2.resize(image, (720, 405))
@@ -364,7 +348,7 @@ def _triangulate_pairs(frames: list[tuple[np.ndarray, str, str | None]]) -> tupl
                         b, g, r = color[iy, ix]
                         xyz.extend((float(hit[0]), float(hit[1] + 0.15), float(hit[2])))
                         rgb.extend((int(r), int(g), int(b)))
-        prev_gray, prev_color, prev_kp, prev_des, prev_cam = gray, color, kp, des, camera_id
+        prev_kp, prev_des, prev_cam = kp, des, camera_id
     return xyz, rgb, matches_total
 
 

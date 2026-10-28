@@ -17,7 +17,7 @@ class NoteIn(BaseModel):
     folder: str = "Inbox"
 
 
-class AiIn(BaseModel):
+class ReportIn(BaseModel):
     units: list[str] = Field(default_factory=list)
 
 
@@ -71,9 +71,9 @@ def upsert(payload: NoteIn):
     return {"note": note, "graph": obs.build_graph(notes), "analytics": obs.analytics(notes)}
 
 
-@router.post("/ai")
-def ai_doc(payload: AiIn | None = None):
-    path, content = obs.compose_ai_doc({"units": (payload.units if payload else [])})
+@router.post("/report")
+def site_report(payload: ReportIn | None = None):
+    path, content = obs.compose_site_report({"units": (payload.units if payload else [])})
     note = obs.write_note(path, content, sync_api=True)
     notes = obs.list_notes()
     return {"note": note, "graph": obs.build_graph(notes), "analytics": obs.analytics(notes)}

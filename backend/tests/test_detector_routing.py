@@ -1,5 +1,8 @@
 """Маршрутизация бэкенда детектора: demo vs world (с моками)."""
 
+import sys
+from types import ModuleType
+
 import numpy as np
 import pytest
 
@@ -8,12 +11,10 @@ from app.services.detector import EquipmentDetector, RawDetection
 
 @pytest.fixture
 def detector(monkeypatch):
-    det = EquipmentDetector()
-    monkeypatch.setattr(
-        "app.services.detector.cv2.imread",
-        lambda _path: np.zeros((480, 640, 3), dtype=np.uint8),
-    )
-    return det
+    cv2_stub = ModuleType("cv2")
+    cv2_stub.imread = lambda _path: np.zeros((480, 640, 3), dtype=np.uint8)
+    monkeypatch.setitem(sys.modules, "cv2", cv2_stub)
+    return EquipmentDetector()
 
 
 def test_explicit_demo_skips_model_load(detector, monkeypatch, tmp_path):

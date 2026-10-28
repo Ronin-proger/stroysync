@@ -18,7 +18,7 @@ const FOLDER_COLOR = {
   Schedule: 0xb8b8c8,
   Journal: 0xc8c8c8,
   People: 0xaaaaaa,
-  AI: 0xffffff,
+  Reports: 0xffffff,
   Inbox: 0x8a8a8a,
 };
 
@@ -182,7 +182,7 @@ function renderTree(list) {
   box.innerHTML = Object.entries(groups).map(([folder, items]) => `
     <p class="notes-folder">${folder}</p>
     ${items.map((n) => `<button type="button" data-path="${n.path}">
-      <i class="led ${n.source === "ai" ? "warn" : "on"}"></i>
+      <i class="led ${n.type === "report" ? "warn" : "on"}"></i>
       <span>${n.title}<b>${(n.tags || []).slice(0, 2).join(" ")}</b></span>
     </button>`).join("")}
   `).join("");

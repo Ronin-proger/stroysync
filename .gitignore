@@ -33,3 +33,4 @@ hac.zip
 
 # Obsidian plugin vendor dumps (install via Community Plugins)
 HACAOBS/.obsidian/plugins/
+HACAOBS/.obsidian/workspace.json

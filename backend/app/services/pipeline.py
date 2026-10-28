@@ -12,6 +12,7 @@ from ..services.annotator import annotate_image
 from ..services.detector import detector
 from ..services.knowledge import parse_day
 from ..services.matcher import match_snapshot
+from ..timeutil import utcnow
 
 
 def analyze_image(
@@ -25,7 +26,7 @@ def analyze_image(
     camera = db.get(Camera, camera_id)
     if camera is None:
         raise ValueError(f"Камера {camera_id} не найдена")
-    captured_at = captured_at or datetime.utcnow()
+    captured_at = captured_at or utcnow()
     name = f"{hint or ''} {image_path.name}".lower()
     if "sample_" in name and settings.detector_backend != "world":
         backend = "demo"

@@ -11,7 +11,6 @@ import math
 
 import numpy as np
 
-
 # Эталонная площадка ~ 80×80 м
 CAMERA_POSES = {
     "CAM-01": {

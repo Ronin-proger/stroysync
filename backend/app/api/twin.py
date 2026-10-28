@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Camera, Detection, SiteTwin, Snapshot
+from ..models import Camera, SiteTwin, Snapshot
 from ..services.detector import RawDetection
 from ..services.pipeline import analyze_image
 from ..services.reconstructor import (
@@ -19,8 +19,10 @@ from ..services.reconstructor import (
     write_gltf,
     write_ply,
 )
+from ..timeutil import utcnow
 from .serializers import file_url, snapshot_to_out
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/twin", tags=["twin"])
 
 VIDEO_AND_IMAGE = {
@@ -61,7 +63,7 @@ def _deactivate(db: Session) -> None:
 
 def persist_scene(db: Session, scene: dict, source_count: int) -> SiteTwin:
     _deactivate(db)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = utcnow().strftime("%Y%m%d_%H%M%S")
     gltf_path = settings.twins_dir / f"twin_{ts}.gltf"
     ply_path = settings.twins_dir / f"twin_{ts}.ply"
     write_gltf(scene, gltf_path)
@@ -112,7 +114,7 @@ async def reconstruct(
     if not files:
         raise HTTPException(400, "Нужен хотя бы один файл")
     saved: list[Path] = []
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = utcnow().strftime("%Y%m%d_%H%M%S")
     for i, upload in enumerate(files[:12]):
         dest = settings.upload_dir / f"{ts}_{i}_{_safe_name(upload.filename or 'frame.jpg')}"
         dest.write_bytes(await upload.read())
@@ -123,7 +125,7 @@ async def reconstruct(
             try:
                 analyze_image(db, image_path=dest, camera_id=camera_id, hint=upload.filename)
             except Exception:
-                pass
+                logger.exception("Snapshot analysis failed for %s; frame still used for reconstruction", dest.name)
     frames = extract_media_frames(saved, camera_id)
     if not frames:
         raise HTTPException(400, "Не удалось прочитать кадры")

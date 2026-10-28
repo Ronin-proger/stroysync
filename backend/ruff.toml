@@ -1,0 +1,5 @@
+target-version = "py311"
+line-length = 120
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Query"]

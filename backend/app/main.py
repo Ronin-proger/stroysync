@@ -11,11 +11,12 @@ from .api.analyze import router as analyze_router
 from .api.catalog import router as catalog_router
 from .api.demo import router as demo_router
 from .api.notes import router as notes_router
-from .api.twin import ensure_default_twin, router as twin_router
-from .services.obsidian import ensure_seed
+from .api.twin import ensure_default_twin
+from .api.twin import router as twin_router
 from .config import settings
 from .db import Base, SessionLocal, engine, migrate_schema
 from .seed import seed_if_empty
+from .services.obsidian import ensure_seed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("stroysync")

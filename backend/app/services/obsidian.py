@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import re
-from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -15,7 +14,7 @@ from ..config import settings
 
 WIKI = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]")
 TAG = re.compile(r"(?<!\w)#([A-Za-zА-Яа-я0-9_/-]+)")
-FM = re.compile(r"^---\n(.*?)\n---\n?", re.S)
+FM = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 
 
 def vault_root() -> Path:
@@ -35,21 +34,23 @@ def api_status() -> dict:
     urls = [settings.obsidian_api_url.rstrip("/")]
     if "27124" in urls[0]:
         urls.append(urls[0].replace("https://", "http://").replace("27124", "27123"))
+    last_error = "offline"
     for base in urls:
         try:
+            # Local REST API ships a self-signed certificate bound to 127.0.0.1.
             r = httpx.get(base + "/", headers=_headers(), timeout=1.6, verify=False)
-            if r.status_code < 500:
-                return {"ok": r.status_code < 400, "base": base, "status": r.status_code, "body": _safe_json(r)}
-        except Exception as exc:
-            last = str(exc)
+        except httpx.HTTPError as exc:
+            last_error = str(exc)
             continue
-    return {"ok": False, "base": None, "status": 0, "error": locals().get("last", "offline")}
+        if r.status_code < 500:
+            return {"ok": r.status_code < 400, "base": base, "status": r.status_code, "body": _safe_json(r)}
+    return {"ok": False, "base": None, "status": 0, "error": last_error}
 
 
 def _safe_json(r: httpx.Response):
     try:
         return r.json()
-    except Exception:
+    except ValueError:
         return r.text[:240]
 
 
@@ -67,7 +68,7 @@ def _api_put(path: str, content: str) -> bool:
             verify=False,
         )
         return r.status_code < 400
-    except Exception:
+    except httpx.HTTPError:
         return False
 
 
@@ -112,7 +113,7 @@ def parse_note(path: Path) -> dict:
         "links": links,
         "author": meta.get("author") or meta.get("created_by") or "system",
         "type": meta.get("type") or (path.parent.name.lower() if path.parent != vault_root() else "note"),
-        "created": meta.get("created") or datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).date().isoformat(),
+        "created": meta.get("created") or datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).date().isoformat(),
         "source": meta.get("source") or "vault",
         "chars": len(body),
         "preview": body.strip()[:280],
@@ -128,7 +129,7 @@ def list_notes() -> list[dict]:
             continue
         try:
             notes.append(parse_note(p))
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             continue
     notes.sort(key=lambda n: (n["folder"], n["title"]))
     return notes
@@ -225,41 +226,40 @@ def compose_user_note(title: str, body: str, author: str, folder: str = "Inbox")
     return path, content
 
 
-def compose_ai_doc(context: dict | None = None) -> tuple[str, str]:
+def compose_site_report(context: dict | None = None) -> tuple[str, str]:
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     day = datetime.now().strftime("%Y-%m-%d")
     ctx = context or {}
-    title = "AI · журнал площадки"
-    path = f"AI/{day} журнал.md"
+    title = "Сводка площадки"
+    path = f"Reports/{day} сводка.md"
     units = ctx.get("units") or ["CRN-A-MSK", "BLD-A-MSK", "BLD-B-MSK", "BLD-C-MSK", "PIT-01-MSK"]
     content = (
-        f"---\n"
+        "---\n"
         f"title: {title}\n"
-        f"type: ai-doc\n"
-        f"tags: [ai, documentation, site-01]\n"
-        f"author: stroysync-ai\n"
+        "type: report\n"
+        "tags: [report, site-01]\n"
+        "author: stroysync\n"
         f"created: {day}\n"
-        f"source: ai\n"
-        f"---\n\n"
+        "source: platform\n"
+        "---\n\n"
         f"# {title}\n\n"
-        f"Черновик вшитого ИИ. Позже модель будет править этот файл по кадрам и WBS.\n\n"
-        f"## Сводка {stamp}\n\n"
-        f"- Площадка: [[SITE-01]]\n"
-        f"- Каркас: [[Корпус A]], [[Корпус B]], фундамент [[Корпус C]]\n"
-        f"- Земляные: [[Котлован]]\n"
-        f"- Подъём: [[Башенный кран 1]], [[Башенный кран 2]]\n"
-        f"- Люди: [[Смена]]\n"
-        f"- Охрана труда: [[Техника безопасности]]\n\n"
-        f"## Юниты в контуре\n\n"
+        f"## Состояние на {stamp}\n\n"
+        "- Площадка: [[SITE-01]]\n"
+        "- Каркас: [[Корпус A]], [[Корпус B]], фундамент [[Корпус C]]\n"
+        "- Земляные: [[Котлован]]\n"
+        "- Подъём: [[Башенный кран 1]], [[Башенный кран 2]]\n"
+        "- Люди: [[Смена]]\n"
+        "- Охрана труда: [[Техника безопасности]]\n\n"
+        "## Юниты в контуре\n\n"
         + "".join(f"- `{u}`\n" for u in units)
         + "\n## Риски\n\n"
-        f"- Корпус C отстаёт от графика — см. [[Корпус C]] и [[WBS]].\n"
-        f"- Сигнал крана №2 умеренный, ветер.\n"
-        f"- Склад материалов: нехватка плёнки — [[Склад материалов]].\n\n"
-        f"## Следующие действия ИИ\n\n"
-        f"1. Сверить технику с [[WBS]].\n"
-        f"2. Дописать акт скрытых работ по [[Котлован]].\n"
-        f"3. Обновить [[Журнал работ]].\n"
+        "- Корпус C отстаёт от графика — см. [[Корпус C]] и [[WBS]].\n"
+        "- Кран №2 в сниженном режиме из-за ветра.\n"
+        "- Склад материалов: нехватка плёнки — [[Склад материалов]].\n\n"
+        "## Следующие шаги\n\n"
+        "1. Сверить технику с [[WBS]].\n"
+        "2. Дописать акт скрытых работ по [[Котлован]].\n"
+        "3. Обновить [[Журнал работ]].\n"
     )
     return path, content
 
@@ -292,7 +292,7 @@ source: seed
 
 - [[WBS]] · [[Журнал работ]] · [[Смена]]
 - [[Техника безопасности]]
-- [[AI · журнал площадки]]
+- [[Сводка площадки]]
 """,
     "Site/Корпус A.md": """---
 title: Корпус A
@@ -512,7 +512,7 @@ source: seed
 
 Кран №2 в сниженном режиме. Смена 46 чел. — [[Смена]].
 
-Связано: [[WBS]], [[AI · журнал площадки]].
+Связано: [[WBS]], [[Сводка площадки]].
 """,
     "People/Смена.md": """---
 title: Смена
@@ -544,18 +544,18 @@ source: seed
 
 Запрет на край шпунта без страховки — [[Котлован]].
 """,
-    "AI/AI · журнал площадки.md": """---
-title: AI · журнал площадки
-type: ai-doc
-tags: [ai, documentation]
-author: stroysync-ai
+    "Reports/Сводка площадки.md": """---
+title: Сводка площадки
+type: report
+tags: [report]
+author: stroysync
 created: 2026-09-24
-source: ai
+source: platform
 ---
 
-# AI · журнал площадки
+# Сводка площадки
 
-Стартовый черновик вшитого ИИ. Новые сводки пишутся кнопкой «ИИ: журнал» и правятся моделью позже.
+Ежедневные сводки создаются кнопкой «Сводка» на панели заметок и складываются в эту папку.
 
 Контур: [[SITE-01]], [[WBS]], [[Журнал работ]].
 """,
@@ -586,8 +586,4 @@ def ensure_seed() -> dict:
             dest.write_text(text, encoding="utf-8")
             written.append(rel)
             _api_put(rel, text)
-    welcome = vault_root() / "Добро пожаловать.md"
-    if welcome.exists() and "ваше новое" in welcome.read_text(encoding="utf-8"):
-        # keep as-is; already in vault
-        pass
     return {"seeded": written, "total": len(list_notes()), "api": api_status()}
