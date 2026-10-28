@@ -37,7 +37,7 @@ async def lifespan(_: FastAPI):
             seed = ensure_seed()
             logger.info("Obsidian vault: %s notes, api=%s", seed.get("total"), seed.get("api", {}).get("ok"))
         except Exception:
-            logger.exception("Не удалось подготовить хранилище HACAOBS")
+            logger.exception("Не удалось подготовить хранилище Obsidian")
     finally:
         db.close()
     sample = settings.data_dir / "samples" / "sample_foundation.jpg"

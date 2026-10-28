@@ -6,14 +6,17 @@ venv/
 .env
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 node_modules/
 frontend/dist/
 
 media/uploads/*
 media/annotated/*
+media/twins/*
 !media/uploads/.gitkeep
 !media/annotated/.gitkeep
+!media/twins/.gitkeep
 
 *.pt
 *.onnx
@@ -27,4 +30,6 @@ Thumbs.db
 
 hac.zip
 *.db
-HACAOBS/.obsidian/plugins/**/data.json
+
+# Obsidian plugin vendor dumps (install via Community Plugins)
+HACAOBS/.obsidian/plugins/

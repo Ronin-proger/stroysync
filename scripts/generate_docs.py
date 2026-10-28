@@ -272,10 +272,10 @@ def build_docx():
     p("7. В другом терминале: cd frontend; npm install; npm run dev")
     p("8. Браузер: http://localhost:5173  API: http://localhost:8000/docs")
 
-    h("6.2. Docker", 2)
+    h("6.2. Docker (основной способ)", 2)
     p("docker compose up --build")
     p("UI: http://localhost:8080  API: http://localhost:8000")
-    p("По умолчанию DETECTOR_BACKEND=demo. Для YOLO-World смените переменную у сервиса backend (скачаются веса PyTorch, образ тяжелее, первый запуск дольше).")
+    p("По умолчанию DETECTOR_BACKEND=auto (world → coco → demo). Для офлайн CI задайте DETECTOR_BACKEND=demo. YOLO-World скачает веса PyTorch при первом запуске.")
 
     h("6.3. Проверка чужого снимка", 2)
     p("POST /api/analyze (multipart: file, camera_id, captured_at). Либо CLI: python -m app.cli analyze photo.jpg --camera CAM-01 --at 2026-09-17T10:00:00")

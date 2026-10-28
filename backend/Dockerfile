@@ -15,7 +15,7 @@ COPY media /app/media
 COPY scripts /app/scripts
 
 ENV PYTHONPATH=/app/backend
-ENV DETECTOR_BACKEND=demo
+ENV DETECTOR_BACKEND=auto
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app/backend

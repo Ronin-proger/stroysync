@@ -196,7 +196,7 @@ function renderAnalytics(a, api) {
   const led = document.getElementById("notes-api-led");
   const apiLbl = document.getElementById("notes-api-label");
   if (led) led.className = `led ${api?.ok ? "on" : "warn"}`;
-  if (apiLbl) apiLbl.textContent = api?.ok ? "Local REST API" : "HACAOBS fallback";
+  if (apiLbl) apiLbl.textContent = api?.ok ? "Local REST API" : "vault fallback";
   if (kpis && a?.totals) {
     kpis.innerHTML = [
       ["Заметки", a.totals.notes, "общие"],

@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{ROOT_DIR / 'data' / 'stroysync.db'}"
     media_dir: Path = ROOT_DIR / "media"
     data_dir: Path = ROOT_DIR / "data"
-    detector_backend: str = "demo"  # demo | auto | world | coco
+    detector_backend: str = "auto"  # auto | world | coco | demo
     detector_conf: float = 0.18
-    cors_origins: str = "*"
+    cors_origins: str = "http://localhost:8000,http://localhost:5173,http://localhost:8080"
     obsidian_api_url: str = "https://127.0.0.1:27124"
     obsidian_api_key: str = ""
     obsidian_vault_dir: Path = ROOT_DIR / "HACAOBS"

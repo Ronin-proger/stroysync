@@ -21,7 +21,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg2://stroysync:stroysync@db:5432/stroysync
-      DETECTOR_BACKEND: demo
+      DETECTOR_BACKEND: auto
       MEDIA_DIR: /app/media
       DATA_DIR: /app/data
     volumes:

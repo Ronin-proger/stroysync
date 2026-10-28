@@ -1,4 +1,4 @@
-"""Общий слой заметок: Local REST API Obsidian + запасное хранилище HACAOBS."""
+"""Общий слой заметок: Local REST API Obsidian + запасное markdown-хранилище."""
 
 from __future__ import annotations
 
